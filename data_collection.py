@@ -11,3 +11,33 @@
 # Once a land mass is sufficiently covered, start at a new one
 # Deploy in an ec2 instance for continuous running
 # Multithreading??
+import requests
+import json
+
+
+init_lat = 42.3971
+init_long = -71.1862  # top left rectilinear area
+end_lat = 42.2336
+end_long = -71.0077
+int_height = int(init_lat*10000 - end_lat*10000)
+int_width = int(end_long*10000 - init_long*10000)
+print(int_height*int_width)
+coords = set()
+
+for shift_vert in range(int_height):
+    for shift_horiz in range(int_width):
+        lat = init_lat - shift_vert/10000
+        long = init_long + shift_horiz/10000
+
+        r = requests.get(f"https://roads.googleapis.com/v1/snapToRoads?interpolate=true&path={lat},{long}&key=AIzaSyAJpRuTuGC5bMm0CcaPEU0ruRG6UW4oYTY").text
+        try:
+            json_coords = json.loads(r)["snappedPoints"][0]["location"]
+        except KeyError:
+            continue
+        SV_lat = json_coords["latitude"]
+        SV_long = json_coords["longitude"]
+        coords.add((SV_lat, SV_long))
+        if shift_horiz%100==0:
+            print(SV_lat, SV_long, f"\t{shift_horiz/int_width}% x {shift_vert/int_height}%")
+
+print(len(coords))
