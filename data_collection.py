@@ -15,29 +15,66 @@ import requests
 import json
 
 
-init_lat = 42.3971
-init_long = -71.1862  # top left rectilinear area
-end_lat = 42.2336
-end_long = -71.0077
-int_height = int(init_lat*10000 - end_lat*10000)
-int_width = int(end_long*10000 - init_long*10000)
-print(int_height*int_width)
+with open("maps_api_key.txt", "r") as key:
+    API_KEY = key.read().strip()
+key.close()
+
+class Break_continue(Exception):
+    pass
+break_continue = Break_continue()
+
+init_lat = 42.397
+init_long = -71.186  # top left rectilinear area
+end_lat = 42.234
+end_long = -71.008
+int_height = int(init_lat*1000 - end_lat*1000)
+int_width = int(end_long*1000 - init_long*1000)
+print("Max images:", int_height*int_width)
+
 coords = set()
 
 for shift_vert in range(int_height):
     for shift_horiz in range(int_width):
-        lat = init_lat - shift_vert/10000
-        long = init_long + shift_horiz/10000
+        neighborhood = None
+        lat = init_lat - shift_vert/1000
+        long = init_long + shift_horiz/1000
+        # get progress
+        if shift_horiz%100==0:
+            print(f"{shift_horiz/int_width}% x {shift_vert/int_height}%")
 
-        r = requests.get(f"https://roads.googleapis.com/v1/snapToRoads?interpolate=true&path={lat},{long}&key=AIzaSyAJpRuTuGC5bMm0CcaPEU0ruRG6UW4oYTY").text
+        # get location information
+        r = requests.get(f"https://roads.googleapis.com/v1/snapToRoads?interpolate=true&path={lat},{long}&key={API_KEY}").content
         try:
-            json_coords = json.loads(r)["snappedPoints"][0]["location"]
+            json_info = json.loads(r)["snappedPoints"][0]
+            place_id = json_info["placeId"]
         except KeyError:
             continue
-        SV_lat = json_coords["latitude"]
-        SV_long = json_coords["longitude"]
-        coords.add((SV_lat, SV_long))
-        if shift_horiz%100==0:
-            print(SV_lat, SV_long, f"\t{shift_horiz/int_width}% x {shift_vert/int_height}%")
+        SV_lat = json_info["location"]["latitude"]
+        SV_long = json_info["location"]["longitude"]
+
+        # get geographical information
+        r = requests.get(f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&key={API_KEY}").content
+        try:
+            for component in json.loads(r)["result"]["address_components"]:
+                if "neighborhood" in component["types"]:
+                    neighborhood = component["long_name"]
+                elif "locality" in component["types"] and component["long_name"] != "Boston":
+                    raise break_continue
+                elif "country" in component["types"] and neighborhood != None:
+                    break
+        except (KeyError, Break_continue):
+            continue
+
+        # get streetview images
+        for rot in range(4):  # 360 degree images
+            img_data = requests.get(f"https://maps.googleapis.com/maps/api/streetview?size=180x90&location={SV_lat},{SV_long}&heading={str(90*rot)}&key={API_KEY}").content
+            with open(f"images_data/{str(shift_vert*int_width+shift_horiz)}({str(rot+1)}).jpg", "wb") as handler:
+                handler.write(img_data)
+            handler.close()
+
+        coords.add((str(shift_vert*int_width+shift_horiz), neighborhood))
 
 print(len(coords))
+with open("coords.txt", "w") as f:
+    f.write(str(coords))
+f.close()
