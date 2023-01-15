@@ -3,3 +3,5 @@ Inspired by the original machine learning model PlaNet, PlaNet 2.0 is my attempt
 
 
 Original PlaNet paper: https://arxiv.org/abs/1602.05314
+
+**Paused due to a lack of accessible data.
